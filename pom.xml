@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>io.github.robwin</groupId>
     <artifactId>circuitbreaker-java8</artifactId>
-    <version>0.1.5</version>
+    <version>0.1.5-nodeps</version>
     <name>CircuitBreaker Java 8</name>
     <description>A CircuitBreaker pattern implementation for Java 8 and functional programming</description>
 
