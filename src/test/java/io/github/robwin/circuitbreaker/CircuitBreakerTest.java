@@ -18,7 +18,7 @@
  */
 package io.github.robwin.circuitbreaker;
 
-import javaslang.control.Try;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,7 +36,7 @@ public class CircuitBreakerTest {
     private CircuitBreakerRegistry circuitBreakerRegistry;
 
     @Before
-    public void setUp(){
+    public void setUp() {
         circuitBreakerRegistry = CircuitBreakerRegistry.of(new CircuitBreakerConfig.Builder()
                 .maxFailures(1)
                 .waitInterval(1000)
@@ -53,15 +54,14 @@ public class CircuitBreakerTest {
         assertThat(circuitBreaker.isCallPermitted()).isFalse();
 
         //When
-        Try.CheckedRunnable checkedRunnable = CircuitBreaker.decorateCheckedRunnable(() -> {
-            throw new RuntimeException("BAM!");
-        }, circuitBreaker);
-        Try result = Try.run(checkedRunnable);
-
-        //Then
-        assertThat(result.isFailure()).isTrue();
-        assertThat(circuitBreaker.isCallPermitted()).isFalse();
-        assertThat(result.failed().get()).isInstanceOf(CircuitBreakerOpenException.class);
+        try {
+            CircuitBreaker.decorateRunnable(() -> {
+                throw new RuntimeException("BAM!");
+            }, circuitBreaker).run();
+        } catch (CircuitBreakerOpenException e) {
+            //Then
+            assertThat(circuitBreaker.isCallPermitted()).isFalse();
+        }
     }
 
     @Test
@@ -71,15 +71,15 @@ public class CircuitBreakerTest {
         assertThat(circuitBreaker.isCallPermitted()).isTrue();
 
         //When
-        Try.CheckedRunnable checkedRunnable = CircuitBreaker.decorateCheckedRunnable(() -> {
-            throw new RuntimeException("BAM!");
-        }, circuitBreaker);
-        Try result = Try.run(checkedRunnable);
-
-        //Then
-        assertThat(result.isFailure()).isTrue();
-        assertThat(circuitBreaker.isCallPermitted()).isTrue();
-        assertThat(result.failed().get()).isInstanceOf(RuntimeException.class);
+        try {
+            CircuitBreaker.decorateRunnable(() -> {
+                throw new RuntimeException("BAM!");
+            }, circuitBreaker).run();
+            Assert.fail();
+        } catch (RuntimeException e) {
+            //Then
+            assertThat(circuitBreaker.isCallPermitted()).isTrue();
+        }
     }
 
     @Test
@@ -95,18 +95,6 @@ public class CircuitBreakerTest {
         circuitBreaker.recordFailure(new RuntimeException());
         // CircuitBreaker is still CLOSED, because 1 failure is allowed
         assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
-
-        //When
-        Try.CheckedRunnable checkedRunnable = CircuitBreaker.decorateCheckedRunnable(() -> {
-            throw new SocketTimeoutException("BAM!");
-        }, circuitBreaker);
-        Try result = Try.run(checkedRunnable);
-
-        //Then
-        assertThat(result.isFailure()).isTrue();
-        // CircuitBreaker is still CLOSED, because SocketTimeoutException is ignored
-        assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
-        assertThat(result.failed().get()).isInstanceOf(IOException.class);
     }
 
     @Test
@@ -120,47 +108,6 @@ public class CircuitBreakerTest {
 
         //Then
         assertThat(checkedSupplier.get()).isEqualTo("Hello world");
-    }
-
-    @Test
-    public void shouldReturnWitRecovery() {
-        // Given
-        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("testName");
-        assertThat(circuitBreaker.isCallPermitted()).isTrue();
-        circuitBreaker.recordFailure(new RuntimeException());
-        assertThat(circuitBreaker.isCallPermitted()).isTrue();
-        circuitBreaker.recordFailure(new RuntimeException());
-        assertThat(circuitBreaker.isCallPermitted()).isFalse();
-
-        //When
-        Try.CheckedSupplier<String> checkedSupplier = CircuitBreaker.decorateCheckedSupplier(() -> {
-            throw new RuntimeException("BAM!");
-        }, circuitBreaker);
-        Try<String> result = Try.of(checkedSupplier)
-                .recover((throwable) -> "Hello Recovery");
-
-        //Then
-        assertThat(result.isSuccess()).isTrue();
-        assertThat(circuitBreaker.isCallPermitted()).isFalse();
-        assertThat(result.get()).isEqualTo("Hello Recovery");
-    }
-
-    @Test
-    public void shouldInvokeMap() {
-        // Given
-        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("testName");
-        // When
-        Try.CheckedSupplier<String> decoratedSupplier = CircuitBreaker
-                .decorateCheckedSupplier(() -> "This can be any method which returns: 'Hello", circuitBreaker);
-
-        // You can chain other functions with map and flatMap. The Try Monad returns a Success<String>, if the all
-        // functions run successfully.
-        Try<String> result = Try.of(decoratedSupplier)
-                        .map(value -> value + " world'");
-
-        // Then
-        assertThat(result.isSuccess()).isTrue();
-        assertThat(result.get()).isEqualTo("This can be any method which returns: 'Hello world'");
     }
 
     @Test
@@ -178,14 +125,6 @@ public class CircuitBreakerTest {
         assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED); // CircuitBreaker is still CLOSED, because 1 failure is allowed
         circuitBreaker.recordFailure(new RuntimeException());
         assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN); // CircuitBreaker is OPEN, because maxFailures > 1
-
-        // When
-        Try<String> result = Try.of(CircuitBreaker.decorateCheckedSupplier(() -> "Hello", circuitBreaker))
-                .map(value -> value + " world");
-
-        // Then
-        assertThat(result.isFailure()).isTrue(); // Call fails, because CircuitBreaker is OPEN
-        assertThat(result.failed().get()).isInstanceOf(CircuitBreakerOpenException.class); // Exception is CircuitBreakerOpenException
     }
 
     @Test
@@ -204,28 +143,5 @@ public class CircuitBreakerTest {
         assertThat(future.get()).isEqualTo("This can be any method which returns: 'Hello world'");
     }
 
-
-    @Test
-    public void shouldChainDecoratedFunctions() throws ExecutionException, InterruptedException {
-        // Given
-        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("testName");
-        CircuitBreaker anotherCircuitBreaker = circuitBreakerRegistry.circuitBreaker("anotherTestName");
-
-        // When
-        Try.CheckedSupplier<String> decoratedSupplier = CircuitBreaker
-                .decorateCheckedSupplier(() -> "Hello", circuitBreaker);
-
-        Try.CheckedFunction<String, String> decoratedFunction = CircuitBreaker
-                .decorateCheckedFunction((input) -> input + " world", anotherCircuitBreaker);
-
-        // You can chain other functions with map and flatMap. The Try Monad returns a Success<String>, if the all
-        // functions run successfully.
-        Try<String> result = Try.of(decoratedSupplier)
-                .map(decoratedFunction);
-
-        // Then
-        assertThat(result.isSuccess()).isTrue();
-        assertThat(result.get()).isEqualTo("Hello world");
-    }
 
 }

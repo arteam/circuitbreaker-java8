@@ -1,7 +1,5 @@
 package io.github.robwin.retry;
 
-import javaslang.control.Try;
-
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -37,40 +35,6 @@ public interface Retry {
 
     static Retry ofDefaults(){
         return Retry.custom().build();
-    }
-
-    static <T> Try.CheckedSupplier<T> retryableCheckedSupplier(Try.CheckedSupplier<T> supplier, Retry retryContext){
-        return () -> {
-            do try {
-                return supplier.get();
-            } catch (Exception exception) {
-                retryContext.handleException(exception);
-            } while (retryContext.isRetryAllowedAfterException());
-            // Should never reach this code
-            return null;
-        };
-    }
-
-    static <T> Try.CheckedRunnable retryableCheckedRunnable(Try.CheckedRunnable runnable, Retry retryContext){
-        return () -> {
-            do try {
-                runnable.run();
-            } catch (Exception exception) {
-                retryContext.handleException(exception);
-            } while (retryContext.isRetryAllowedAfterException());
-        };
-    }
-
-    static <T, R> Try.CheckedFunction<T, R> retryableCheckedFunction(Try.CheckedFunction<T, R> function, Retry retryContext){
-        return (T t) -> {
-            do try {
-                return function.apply(t);
-            } catch (Exception exception) {
-                retryContext.handleException(exception);
-            } while (retryContext.isRetryAllowedAfterException());
-            // Should never reach this code
-            return null;
-        };
     }
 
     static <T> Supplier<T> retryableSupplier(Supplier<T> supplier, Retry retryContext){

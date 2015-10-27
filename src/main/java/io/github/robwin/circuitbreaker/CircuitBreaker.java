@@ -18,8 +18,7 @@
  */
 package io.github.robwin.circuitbreaker;
 
-import javaslang.control.Try;
-
+import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -83,33 +82,6 @@ public interface CircuitBreaker {
         HALF_CLOSED
     }
 
-    static <T> Try.CheckedSupplier<T> decorateCheckedSupplier(Try.CheckedSupplier<T> supplier, CircuitBreaker circuitBreaker){
-        return () -> {
-            CircuitBreakerUtils.isCallPermitted(circuitBreaker);
-            try {
-                T returnValue = supplier.get();
-                circuitBreaker.recordSuccess();
-                return returnValue;
-            } catch (Exception exception) {
-                circuitBreaker.recordFailure(exception);
-                throw exception;
-            }
-        };
-    }
-
-    static Try.CheckedRunnable decorateCheckedRunnable(Try.CheckedRunnable runnable, CircuitBreaker circuitBreaker){
-        return () -> {
-            CircuitBreakerUtils.isCallPermitted(circuitBreaker);
-            try{
-                runnable.run();
-                circuitBreaker.recordSuccess();
-            } catch (Exception exception){
-                circuitBreaker.recordFailure(exception);
-                throw exception;
-            }
-        };
-    }
-
     static <T> Supplier<T> decorateSupplier(Supplier<T> supplier, CircuitBreaker circuitBreaker){
         return () -> {
             CircuitBreakerUtils.isCallPermitted(circuitBreaker);
@@ -138,20 +110,6 @@ public interface CircuitBreaker {
     }
 
     static <T, R> Function<T, R> decorateFunction(Function<T, R> function, CircuitBreaker circuitBreaker){
-        return (T t) -> {
-            CircuitBreakerUtils.isCallPermitted(circuitBreaker);
-            try{
-                R returnValue = function.apply(t);
-                circuitBreaker.recordSuccess();
-                return returnValue;
-            } catch (Exception exception){
-                circuitBreaker.recordFailure(exception);
-                throw exception;
-            }
-        };
-    }
-
-    static <T, R> Try.CheckedFunction<T, R> decorateCheckedFunction(Try.CheckedFunction<T, R> function, CircuitBreaker circuitBreaker){
         return (T t) -> {
             CircuitBreakerUtils.isCallPermitted(circuitBreaker);
             try{

@@ -18,12 +18,13 @@
  */
 package io.github.robwin.retry;
 
-import javaslang.control.Try;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.BDDMockito;
 
 import javax.xml.ws.WebServiceException;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.BDDAssertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -47,14 +48,14 @@ public class SupplierRetryTest {
         // Create a Retry with default configuration
         Retry retryContext = Retry.ofDefaults();
         // Decorate the invocation of the HelloWorldService
-        Try.CheckedSupplier<String> retryableSupplier = Retry.retryableCheckedSupplier(helloWorldService::returnHelloWorld, retryContext);
+        Supplier<String> retryableSupplier = Retry.retryableSupplier(helloWorldService::returnHelloWorld, retryContext);
 
         // When
-        Try<String> result = Try.of(retryableSupplier);
+        String result = retryableSupplier.get();
 
         // Then the helloWorldService should be invoked 2 times
         BDDMockito.then(helloWorldService).should(times(2)).returnHelloWorld();
-        assertThat(result.get()).isEqualTo("Hello world");
+        assertThat(result).isEqualTo("Hello world");
     }
 
     @Test
@@ -65,17 +66,16 @@ public class SupplierRetryTest {
         // Create a Retry with default configuration
         Retry retryContext = Retry.ofDefaults();
         // Decorate the invocation of the HelloWorldService
-        Try.CheckedSupplier<String> retryableSupplier = Retry.retryableCheckedSupplier(helloWorldService::returnHelloWorld, retryContext);
+        Supplier<String> retryableSupplier = Retry.retryableSupplier(helloWorldService::returnHelloWorld, retryContext);
 
         // When
-        Try<String> result = Try.of(retryableSupplier);
-
-        // Then the helloWorldService should be invoked 3 times
-        BDDMockito.then(helloWorldService).should(times(3)).returnHelloWorld();
-        // and the result should be a failure
-        assertThat(result.isFailure()).isTrue();
-        // and the returned exception should be of type RuntimeException
-        assertThat(result.failed().get()).isInstanceOf(WebServiceException.class);
+        try {
+            retryableSupplier.get();
+            Assert.fail();
+        }  catch (WebServiceException e){
+            // Then the helloWorldService should be invoked 3 times
+            BDDMockito.then(helloWorldService).should(times(3)).returnHelloWorld();
+        }
     }
 
     @Test
@@ -86,17 +86,16 @@ public class SupplierRetryTest {
         // Create a Retry with default configuration
         Retry retryContext = Retry.custom().maxAttempts(1).build();
         // Decorate the invocation of the HelloWorldService
-        Try.CheckedSupplier<String> retryableSupplier = Retry.retryableCheckedSupplier(helloWorldService::returnHelloWorld, retryContext);
+        Supplier<String> retryableSupplier = Retry.retryableSupplier(helloWorldService::returnHelloWorld, retryContext);
 
         // When
-        Try<String> result = Try.of(retryableSupplier);
-
-        // Then the helloWorldService should be invoked 1 time
-        BDDMockito.then(helloWorldService).should(times(1)).returnHelloWorld();
-        // and the result should be a failure
-        assertThat(result.isFailure()).isTrue();
-        // and the returned exception should be of type RuntimeException
-        assertThat(result.failed().get()).isInstanceOf(WebServiceException.class);
+        try {
+            retryableSupplier.get();
+            Assert.fail();
+        }  catch (WebServiceException e){
+            // Then the helloWorldService should be invoked 1 time
+            BDDMockito.then(helloWorldService).should(times(1)).returnHelloWorld();
+        }
     }
 
     @Test
@@ -107,37 +106,15 @@ public class SupplierRetryTest {
         // Create a Retry with default configuration
         Retry retryContext = Retry.custom().ignoredException(WebServiceException.class).build();
         // Decorate the invocation of the HelloWorldService
-        Try.CheckedSupplier<String> retryableSupplier = Retry.retryableCheckedSupplier(helloWorldService::returnHelloWorld, retryContext);
+        Supplier<String> retryableSupplier = Retry.retryableSupplier(helloWorldService::returnHelloWorld, retryContext);
 
         // When
-        Try<String> result = Try.of(retryableSupplier);
-
-        // Then the helloWorldService should be invoked only once, because the exception should be rethrown immediately.
-        BDDMockito.then(helloWorldService).should(times(1)).returnHelloWorld();
-        // and the result should be a failure
-        assertThat(result.isFailure()).isTrue();
-        // and the returned exception should be of type RuntimeException
-        assertThat(result.failed().get()).isInstanceOf(WebServiceException.class);
+        try {
+            retryableSupplier.get();
+            Assert.fail();
+        }  catch (WebServiceException e){
+            // Then the helloWorldService should be invoked 1 time
+            BDDMockito.then(helloWorldService).should(times(1)).returnHelloWorld();
+        }
     }
-
-    @Test
-    public void shouldReturnAfterThreeAttemptsAndRecover() {
-        // Given the HelloWorldService throws an exception
-        given(helloWorldService.returnHelloWorld()).willThrow(new WebServiceException("BAM!"));
-
-        // Create a Retry with default configuration
-        Retry retryContext = Retry.ofDefaults();
-        // Decorate the invocation of the HelloWorldService
-        Try.CheckedSupplier<String> retryableSupplier = Retry.retryableCheckedSupplier(helloWorldService::returnHelloWorld, retryContext);
-
-        // When
-        Try<String> result = Try.of(retryableSupplier).recover((throwable) -> "Hello world from recovery function");
-
-        // Then the helloWorldService should be invoked 3 times
-        BDDMockito.then(helloWorldService).should(times(3)).returnHelloWorld();
-
-        // and the returned exception should be of type RuntimeException
-        assertThat(result.get()).isEqualTo("Hello world from recovery function");
-    }
-
 }

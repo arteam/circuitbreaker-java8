@@ -18,12 +18,14 @@
  */
 package io.github.robwin.retry;
 
-import javaslang.control.Try;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.BDDMockito;
 
 import javax.xml.ws.WebServiceException;
+
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.BDDAssertions.assertThat;
 import static org.mockito.BDDMockito.willThrow;
@@ -35,7 +37,7 @@ public class RunnableRetryTest {
     private HelloWorldService helloWorldService;
 
     @Before
-    public void setUp(){
+    public void setUp() {
         helloWorldService = mock(HelloWorldService.class);
     }
 
@@ -46,18 +48,17 @@ public class RunnableRetryTest {
 
         // Create a Retry with default configuration
         Retry retryContext = Retry.ofDefaults();
-        // Decorate the invocation of the HelloWorldService
-        Try.CheckedRunnable retryableRunnable = Retry.retryableCheckedRunnable(helloWorldService::sayHelloWorld, retryContext);
 
-        // When
-        Try<Void> result = Try.run(retryableRunnable);
+        try {
+            // Decorate the invocation of the HelloWorldService
+            Retry.retryableRunnable(helloWorldService::sayHelloWorld, retryContext).run();
+            Assert.fail();
+        } catch (WebServiceException e) {
+            // Then the helloWorldService should be invoked 3 times
+            BDDMockito.then(helloWorldService).should(times(3)).sayHelloWorld();
+        }
 
-        // Then the helloWorldService should be invoked 3 times
-        BDDMockito.then(helloWorldService).should(times(3)).sayHelloWorld();
-        // and the result should be a failure
-        assertThat(result.isFailure()).isTrue();
-        // and the returned exception should be of type RuntimeException
-        assertThat(result.failed().get()).isInstanceOf(WebServiceException.class);
+
     }
 
     @Test
@@ -68,17 +69,15 @@ public class RunnableRetryTest {
         // Create a Retry with default configuration
         Retry retryContext = Retry.custom().maxAttempts(1).build();
         // Decorate the invocation of the HelloWorldService
-        Try.CheckedRunnable retryableRunnable = Retry.retryableCheckedRunnable(helloWorldService::sayHelloWorld, retryContext);
+        try {
+            Retry.retryableRunnable(helloWorldService::sayHelloWorld, retryContext).run();
+            Assert.fail();
+        }  catch (WebServiceException e){
+            // Then the helloWorldService should be invoked 1 time
+            BDDMockito.then(helloWorldService).should(times(1)).sayHelloWorld();
+        }
 
-        // When
-        Try<Void> result = Try.run(retryableRunnable);
 
-        // Then the helloWorldService should be invoked 1 time
-        BDDMockito.then(helloWorldService).should(times(1)).sayHelloWorld();
-        // and the result should be a failure
-        assertThat(result.isFailure()).isTrue();
-        // and the returned exception should be of type RuntimeException
-        assertThat(result.failed().get()).isInstanceOf(WebServiceException.class);
     }
 
     @Test
@@ -88,17 +87,13 @@ public class RunnableRetryTest {
 
         // Create a Retry with default configuration
         Retry retryContext = Retry.custom().ignoredException(WebServiceException.class).build();
-        // Decorate the invocation of the HelloWorldService
-        Try.CheckedRunnable retryableRunnable = Retry.retryableCheckedRunnable(helloWorldService::sayHelloWorld, retryContext);
-
-        // When
-        Try<Void> result = Try.run(retryableRunnable);
-
-        // Then the helloWorldService should be invoked only once, because the exception should be rethrown immediately.
-        BDDMockito.then(helloWorldService).should(times(1)).sayHelloWorld();
-        // and the result should be a failure
-        assertThat(result.isFailure()).isTrue();
-        // and the returned exception should be of type RuntimeException
-        assertThat(result.failed().get()).isInstanceOf(WebServiceException.class);
+        try {
+            // Decorate the invocation of the HelloWorldService
+            Retry.retryableRunnable(helloWorldService::sayHelloWorld, retryContext).run();
+            Assert.fail();
+        } catch (WebServiceException e) {
+            // Then the helloWorldService should be invoked only once, because the exception should be rethrown immediately.
+            BDDMockito.then(helloWorldService).should(times(1)).sayHelloWorld();
+        }
     }
 }

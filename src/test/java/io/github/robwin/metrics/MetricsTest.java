@@ -22,8 +22,9 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import io.github.robwin.circuitbreaker.CircuitBreaker;
 import io.github.robwin.circuitbreaker.CircuitBreakerRegistry;
-import javaslang.control.Try;
 import org.junit.Test;
+
+import java.util.function.Supplier;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static org.assertj.core.api.BDDAssertions.assertThat;
@@ -39,17 +40,19 @@ public class MetricsTest {
         Timer timer = metricRegistry.timer(name("test"));
 
         // When I create a long running supplier
-        Try.CheckedSupplier<String> supplier = () -> {
-            Thread.sleep(2000);
-            return "Hello world";
-        };
-
-        // And measure the time with Metrics
-        Try.CheckedSupplier<String> timedSupplier = Metrics.timedCheckedSupplier(supplier, timer);
+        Supplier<String> timedSupplier = Metrics.timedSupplier(() -> {
+            try {
+                Thread.sleep(2000);
+                return "Hello world";
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+        }, timer);
 
         // And decorate it with a CircuitBreaker
-        Try.CheckedSupplier<String> circuitBreakerAndTimedSupplier = CircuitBreaker
-                .decorateCheckedSupplier(timedSupplier, circuitBreaker);
+        Supplier<String> circuitBreakerAndTimedSupplier = CircuitBreaker
+                .decorateSupplier(timedSupplier, circuitBreaker);
 
         String value = circuitBreakerAndTimedSupplier.get();
 
